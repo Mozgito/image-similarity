@@ -76,24 +76,24 @@ def compare_images(original_image_path: str, compare_images_path: str) -> dict:
     return {'psnr': psnr_measures, 'ssim': ssim_measures, 'rmse': rmse_measures, 'sre': sre_measures}
 
 
-def get_similar_by_metric(compare_results: dict) -> dict:
-    result = {'psnr': {}, 'ssim': {}, 'rmse': {}, 'sre': {}}
+def get_similar_by_metric(compare_results: dict) -> set:
+    result = set()
 
     for metric, metric_values in compare_results.items():
         v = list(metric_values.values())
         k = list(metric_values.keys())
         if metric == 'rmse':
             min_v = v.index(min(v))
-            result[metric][0] = k[min_v]
+            result.add(k[min_v])
             del v[min_v]
             del k[min_v]
-            result[metric][1] = k[v.index(min(v))]
+            result.add(k[v.index(min(v))])
         else:
             max_v = v.index(max(v))
-            result[metric][0] = k[max_v]
+            result.add(k[max_v])
             del v[max_v]
             del k[max_v]
-            result[metric][1] = k[v.index(max(v))]
+            result.add(k[v.index(max(v))])
 
     return result
 
