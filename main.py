@@ -10,14 +10,14 @@ compare_images_path = 'compare_images'
 original_images_path = 'original_images'
 
 
-def resize_images(images_path) -> None:
+def resize_images(images_path: str) -> None:
     for image in os.listdir(images_path):
         image_path = os.path.join(images_path, image)
         if os.path.isfile(image_path):
             resize_image_to_400px(image_path)
 
 
-def resize_image_to_400px(image_path) -> None:
+def resize_image_to_400px(image_path: str) -> None:
     img = cv.imread(image_path, cv.IMREAD_COLOR)
     height = img.shape[0]
     width = img.shape[1]
@@ -54,7 +54,7 @@ def resize_image_to_400px(image_path) -> None:
     cv.destroyAllWindows()
 
 
-def compare_images(original_image_path, compare_images_path) -> dict:
+def compare_images(original_image_path: str, compare_images_path: str) -> dict:
     ssim_measures = {}
     rmse_measures = {}
     sre_measures = {}
@@ -71,6 +71,20 @@ def compare_images(original_image_path, compare_images_path) -> dict:
     return {'ssim': ssim_measures, 'rmse': rmse_measures, 'sre': sre_measures}
 
 
+def get_similar_by_metric(compare_results: dict) -> dict:
+    result = {}
+
+    for metric, metric_values in compare_results.items():
+        v = list(metric_values.values())
+        k = list(metric_values.keys())
+        if metric in ['ssim', 'sre']:
+            result[metric] = k[v.index(max(v))]
+        else:
+            result[metric] = k[v.index(min(v))]
+
+    return result
+
+
 if __name__ == '__main__':
     resize_images(original_images_path)
     resize_images(compare_images_path)
@@ -79,3 +93,4 @@ if __name__ == '__main__':
         if os.path.isfile(image_path):
             compare_result = compare_images(image_path, compare_images_path)
             print(image, compare_result)
+            print(image, get_similar_by_metric(compare_result))
