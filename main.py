@@ -2,7 +2,7 @@ import cv2 as cv
 import math
 import numpy as np
 import os
-from image_similarity_measures.quality_metrics import fsim, psnr, rmse, ssim, sre
+from image_similarity_measures.quality_metrics import psnr, rmse, ssim, sre
 
 np.seterr(divide='ignore', invalid='ignore')
 
@@ -55,7 +55,6 @@ def resize_image_to_400px(image_path: str) -> None:
 
 
 def compare_images(original_image_path: str, compare_images_path: str) -> dict:
-    fsim_measures = {}
     psnr_measures = {}
     ssim_measures = {}
     rmse_measures = {}
@@ -66,7 +65,6 @@ def compare_images(original_image_path: str, compare_images_path: str) -> dict:
         image_path = os.path.join(compare_images_path, image)
         if os.path.isfile(image_path):
             comp_image = cv.imread(image_path)
-            fsim_measures[image_path] = fsim(orig_image, comp_image)
             psnr_measures[image_path] = psnr(orig_image, comp_image)
             ssim_measures[image_path] = ssim(orig_image, comp_image)
             rmse_measures[image_path] = rmse(orig_image, comp_image)
@@ -75,19 +73,27 @@ def compare_images(original_image_path: str, compare_images_path: str) -> dict:
     cv.waitKey(0)
     cv.destroyAllWindows()
 
-    return {'fsim': fsim_measures, 'psnr': psnr_measures,'ssim': ssim_measures, 'rmse': rmse_measures, 'sre': sre_measures}
+    return {'psnr': psnr_measures, 'ssim': ssim_measures, 'rmse': rmse_measures, 'sre': sre_measures}
 
 
 def get_similar_by_metric(compare_results: dict) -> dict:
-    result = {}
+    result = {'psnr': {}, 'ssim': {}, 'rmse': {}, 'sre': {}}
 
     for metric, metric_values in compare_results.items():
         v = list(metric_values.values())
         k = list(metric_values.keys())
         if metric == 'rmse':
-            result[metric] = k[v.index(min(v))]
+            min_v = v.index(min(v))
+            result[metric][0] = k[min_v]
+            del v[min_v]
+            del k[min_v]
+            result[metric][1] = k[v.index(min(v))]
         else:
-            result[metric] = k[v.index(max(v))]
+            max_v = v.index(max(v))
+            result[metric][0] = k[max_v]
+            del v[max_v]
+            del k[max_v]
+            result[metric][1] = k[v.index(max(v))]
 
     return result
 
