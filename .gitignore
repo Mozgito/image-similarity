@@ -1,2 +1,5 @@
 .idea
 /venv
+
+/compare_images/*
+/original_images/*
