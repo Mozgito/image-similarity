@@ -2,7 +2,9 @@ import cv2 as cv
 import math
 import numpy as np
 import os
+import pillow_avif
 from image_similarity_measures.quality_metrics import psnr, rmse, ssim, sre
+from PIL import Image
 
 np.seterr(divide='ignore', invalid='ignore')
 
@@ -10,10 +12,12 @@ compare_images_path = 'compare_images'
 original_images_path = 'original_images'
 
 
-def resize_images(images_path: str) -> None:
+def process_images(images_path: str) -> None:
     for image in os.listdir(images_path):
         image_path = os.path.join(images_path, image)
         if os.path.isfile(image_path):
+            if image_path.endswith('.avif'):
+                image_path = convert_avif_to_jpg(image_path)
             resize_image_to_400px(image_path)
 
 
@@ -52,6 +56,14 @@ def resize_image_to_400px(image_path: str) -> None:
         cv.imwrite(image_path, img_new_padded)
     cv.waitKey(0)
     cv.destroyAllWindows()
+
+
+def convert_avif_to_jpg(image_path: str) -> str:
+    avif_img = Image.open(image_path)
+    avif_img.save(image_path.replace("avif", 'jpg'), 'JPEG')
+    os.remove(image_path)
+
+    return image_path.replace("avif", 'jpg')
 
 
 def compare_images(original_image_path: str, compare_images_path: str) -> dict:
@@ -99,8 +111,8 @@ def get_similar_by_metric(compare_results: dict) -> set:
 
 
 if __name__ == '__main__':
-    resize_images(original_images_path)
-    resize_images(compare_images_path)
+    process_images(original_images_path)
+    process_images(compare_images_path)
     for image in os.listdir(original_images_path):
         image_path = os.path.join(original_images_path, image)
         if os.path.isfile(image_path):
