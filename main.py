@@ -2,7 +2,9 @@ import cv2 as cv
 import math
 import numpy as np
 import os
+import pandas as pd
 import pillow_avif
+import streamlit as st
 from multiprocessing import Pool
 from image_similarity_measures.quality_metrics import psnr, rmse, ssim, sre
 from PIL import Image
@@ -91,32 +93,54 @@ def get_similar_by_metric(compare_results: dict) -> set:
             result.add(k[min_v])
             del v[min_v]
             del k[min_v]
+            min_v2 = v.index(min(v))
+            result.add(k[min_v2])
+            del v[min_v2]
+            del k[min_v2]
             result.add(k[v.index(min(v))])
         else:
             max_v = v.index(max(v))
             result.add(k[max_v])
             del v[max_v]
             del k[max_v]
+            max_v2 = v.index(max(v))
+            result.add(k[max_v2])
+            del v[max_v2]
+            del k[max_v2]
             result.add(k[v.index(max(v))])
 
     return result
 
-
 if __name__ == '__main__':
-    process_images(original_images_path)
-    process_images(compare_images_path)
+    st.title('Image similarity app')
+    st.markdown('---')
+    uploaded_image = st.file_uploader('Upload original image', type=['png', 'jpg', 'jpeg', 'webp'])
+    if uploaded_image is not None:
+        Image.open(uploaded_image).save('img.png')
+        resize_image_to_400px('img.png')
+        process_images(compare_images_path)
 
-    total_result = {'psnr': {}, 'ssim': {}, 'rmse': {}, 'sre': {}}
-    original_image = cv.imread(os.path.join(original_images_path, 'image.jpg'))
+        total_result = {'psnr': {}, 'ssim': {}, 'rmse': {}, 'sre': {}}
+        original_image = cv.imread('img.png')
+        st.image(uploaded_image, 'Original image')
+        with Pool(4) as pool:
+            for result in pool.imap(compare_images, os.listdir(compare_images_path)):
+                total_result['psnr'].update({result['img_path']: result['psnr']})
+                total_result['ssim'].update({result['img_path']: result['ssim']})
+                total_result['rmse'].update({result['img_path']: result['rmse']})
+                total_result['sre'].update({result['img_path']: result['sre']})
 
-    with Pool(4) as pool:
-        for result in pool.imap(compare_images, os.listdir(compare_images_path)):
-            total_result['psnr'].update({result['img_path']: result['psnr']})
-            total_result['ssim'].update({result['img_path']: result['ssim']})
-            total_result['rmse'].update({result['img_path']: result['rmse']})
-            total_result['sre'].update({result['img_path']: result['sre']})
+        cv.waitKey(0)
+        cv.destroyAllWindows()
+        similar_images = get_similar_by_metric(total_result)
+        print(total_result)
+        print(get_similar_by_metric(total_result))
 
-    cv.waitKey(0)
-    cv.destroyAllWindows()
-    print(total_result)
-    print(get_similar_by_metric(total_result))
+        table_total = pd.DataFrame(total_result)
+        table = pd.DataFrame(similar_images)
+        st.markdown('---')
+        st.write('## Similar images')
+        st.dataframe(table)
+        st.dataframe(table_total)
+        for image in similar_images:
+            st.image(image)
