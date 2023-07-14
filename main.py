@@ -3,6 +3,7 @@ import math
 import numpy as np
 import os
 import pillow_avif
+from multiprocessing import Pool
 from image_similarity_measures.quality_metrics import psnr, rmse, ssim, sre
 from PIL import Image
 
@@ -42,7 +43,7 @@ def resize_image_to_400px(image_path: str) -> None:
         pad_top = math.floor((400 - preferred_height) / 2)
         pad_bot = math.ceil((400 - preferred_height) / 2)
 
-    if height != 400 & width != 400:
+    if height != 400 and width != 400:
         img_new = cv.resize(img, (preferred_width, preferred_height))
         img_new_padded = cv.copyMakeBorder(
             img_new,
@@ -66,26 +67,17 @@ def convert_avif_to_jpg(image_path: str) -> str:
     return image_path.replace("avif", 'jpg')
 
 
-def compare_images(original_image_path: str, compare_images_path: str) -> dict:
-    psnr_measures = {}
-    ssim_measures = {}
-    rmse_measures = {}
-    sre_measures = {}
-    orig_image = cv.imread(original_image_path)
+def compare_images(comp_img_name) -> dict:
+    comp_img_path = os.path.join(compare_images_path, comp_img_name)
+    comp_img = cv.imread(comp_img_path)
 
-    for image in os.listdir(compare_images_path):
-        image_path = os.path.join(compare_images_path, image)
-        if os.path.isfile(image_path):
-            comp_image = cv.imread(image_path)
-            psnr_measures[image_path] = psnr(orig_image, comp_image)
-            ssim_measures[image_path] = ssim(orig_image, comp_image)
-            rmse_measures[image_path] = rmse(orig_image, comp_image)
-            sre_measures[image_path] = sre(orig_image, comp_image)
-
-    cv.waitKey(0)
-    cv.destroyAllWindows()
-
-    return {'psnr': psnr_measures, 'ssim': ssim_measures, 'rmse': rmse_measures, 'sre': sre_measures}
+    return {
+        'img_path': comp_img_path,
+        'psnr': psnr(original_image, comp_img),
+        'ssim': ssim(original_image, comp_img),
+        'rmse': rmse(original_image, comp_img),
+        'sre': sre(original_image, comp_img)
+    }
 
 
 def get_similar_by_metric(compare_results: dict) -> set:
@@ -113,9 +105,18 @@ def get_similar_by_metric(compare_results: dict) -> set:
 if __name__ == '__main__':
     process_images(original_images_path)
     process_images(compare_images_path)
-    for image in os.listdir(original_images_path):
-        image_path = os.path.join(original_images_path, image)
-        if os.path.isfile(image_path):
-            compare_result = compare_images(image_path, compare_images_path)
-            print(image, compare_result)
-            print(image, get_similar_by_metric(compare_result))
+
+    total_result = {'psnr': {}, 'ssim': {}, 'rmse': {}, 'sre': {}}
+    original_image = cv.imread(os.path.join(original_images_path, 'image.jpg'))
+
+    with Pool(4) as pool:
+        for result in pool.imap(compare_images, os.listdir(compare_images_path)):
+            total_result['psnr'].update({result['img_path']: result['psnr']})
+            total_result['ssim'].update({result['img_path']: result['ssim']})
+            total_result['rmse'].update({result['img_path']: result['rmse']})
+            total_result['sre'].update({result['img_path']: result['sre']})
+
+    cv.waitKey(0)
+    cv.destroyAllWindows()
+    print(total_result)
+    print(get_similar_by_metric(total_result))
