@@ -1,3 +1,4 @@
+import base64
 import cv2 as cv
 import heapq
 import math
@@ -6,6 +7,7 @@ import os
 import pandas as pd
 import pillow_avif
 import streamlit as st
+from io import BytesIO
 from multiprocessing import Pool
 from image_similarity_measures.quality_metrics import psnr, rmse, ssim, sre
 from PIL import Image
@@ -94,6 +96,24 @@ def get_similar_by_metric(compare_results: dict) -> set:
 
     return result
 
+
+def get_thumbnail(path):
+    i = Image.open(path)
+    return i
+
+
+def image_base64(im):
+    if isinstance(im, str):
+        im = get_thumbnail(im)
+    with BytesIO() as buffer:
+        im.save(buffer, 'jpeg')
+        return base64.b64encode(buffer.getvalue()).decode()
+
+
+def image_formatter(im):
+    return f'<img src="data:image/jpeg;base64,{image_base64(im)}">'
+
+
 if __name__ == '__main__':
     st.title('Image similarity app')
     st.markdown('---')
@@ -129,12 +149,8 @@ if __name__ == '__main__':
         cv.waitKey(0)
         cv.destroyAllWindows()
         similar_images = get_similar_by_metric(total_result)
-        print(total_result)
-        print(get_similar_by_metric(total_result))
-
         table_total = pd.DataFrame(total_result)
-        table = pd.DataFrame(similar_images)
-        st.dataframe(table)
+        table = pd.DataFrame(similar_images, columns=['Path'])
+        table['Image'] = table.Path.map(lambda f: get_thumbnail(f))
+        st.write(table.to_html(formatters={'Image': image_formatter}, escape=False), unsafe_allow_html=True)
         st.dataframe(table_total)
-        for image in similar_images:
-            st.image(image)
