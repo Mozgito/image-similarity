@@ -1,4 +1,5 @@
 import cv2 as cv
+import heapq
 import math
 import numpy as np
 import os
@@ -86,28 +87,10 @@ def get_similar_by_metric(compare_results: dict) -> set:
     result = set()
 
     for metric, metric_values in compare_results.items():
-        v = list(metric_values.values())
-        k = list(metric_values.keys())
         if metric == 'rmse':
-            min_v = v.index(min(v))
-            result.add(k[min_v])
-            del v[min_v]
-            del k[min_v]
-            min_v2 = v.index(min(v))
-            result.add(k[min_v2])
-            del v[min_v2]
-            del k[min_v2]
-            result.add(k[v.index(min(v))])
+            result.update(set(heapq.nsmallest(10, metric_values, key=metric_values.get)))
         else:
-            max_v = v.index(max(v))
-            result.add(k[max_v])
-            del v[max_v]
-            del k[max_v]
-            max_v2 = v.index(max(v))
-            result.add(k[max_v2])
-            del v[max_v2]
-            del k[max_v2]
-            result.add(k[v.index(max(v))])
+            result.update(set(heapq.nlargest(10, metric_values, key=metric_values.get)))
 
     return result
 
@@ -123,12 +106,25 @@ if __name__ == '__main__':
         total_result = {'psnr': {}, 'ssim': {}, 'rmse': {}, 'sre': {}}
         original_image = cv.imread('img.png')
         st.image(uploaded_image, 'Original image')
+        st.markdown('---')
+        st.write('## Similar images')
+        progress_bar = st.progress(0)
+        progress_status = st.empty()
+        progress_bar_count = 0
+        images_current = 0
+        images_count_divider = len(os.listdir(compare_images_path)) / 100
+
         with Pool(4) as pool:
             for result in pool.imap(compare_images, os.listdir(compare_images_path)):
+                images_current += 1
                 total_result['psnr'].update({result['img_path']: result['psnr']})
                 total_result['ssim'].update({result['img_path']: result['ssim']})
                 total_result['rmse'].update({result['img_path']: result['rmse']})
                 total_result['sre'].update({result['img_path']: result['sre']})
+                if images_current >= images_count_divider * progress_bar_count:
+                    progress_bar.progress(progress_bar_count)
+                    progress_status.write(str(progress_bar_count) + ' %')
+                    progress_bar_count += 1
 
         cv.waitKey(0)
         cv.destroyAllWindows()
@@ -138,8 +134,6 @@ if __name__ == '__main__':
 
         table_total = pd.DataFrame(total_result)
         table = pd.DataFrame(similar_images)
-        st.markdown('---')
-        st.write('## Similar images')
         st.dataframe(table)
         st.dataframe(table_total)
         for image in similar_images:
