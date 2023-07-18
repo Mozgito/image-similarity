@@ -128,23 +128,16 @@ if __name__ == '__main__':
         st.image(uploaded_image, 'Original image')
         st.markdown('---')
         st.write('## Similar images')
-        progress_bar = st.progress(0)
-        progress_status = st.empty()
-        progress_bar_count = 0
-        images_current = 0
-        images_count_divider = len(os.listdir(compare_images_path)) / 100
 
         with Pool(4) as pool:
-            for result in pool.imap(compare_images, os.listdir(compare_images_path)):
-                images_current += 1
-                total_result['psnr'].update({result['img_path']: result['psnr']})
-                total_result['ssim'].update({result['img_path']: result['ssim']})
-                total_result['rmse'].update({result['img_path']: result['rmse']})
-                total_result['sre'].update({result['img_path']: result['sre']})
-                if images_current >= images_count_divider * progress_bar_count:
-                    progress_bar.progress(progress_bar_count)
-                    progress_status.write(str(progress_bar_count) + ' %')
-                    progress_bar_count += 1
+            result = pool.map_async(compare_images, os.listdir(compare_images_path))
+            for value in result.get():
+                total_result['psnr'].update({value['img_path']: value['psnr']})
+                total_result['ssim'].update({value['img_path']: value['ssim']})
+                total_result['rmse'].update({value['img_path']: value['rmse']})
+                total_result['sre'].update({value['img_path']: value['sre']})
+            pool.close()
+            pool.join()
 
         cv.waitKey(0)
         cv.destroyAllWindows()
