@@ -79,7 +79,7 @@ def convert_avif_to_jpg(image_path: str) -> str:
     return image_path.replace("avif", 'jpg')
 
 
-def compare_images(comp_img_name) -> dict:
+def compare_images(comp_img_name: str) -> dict:
     comp_img_path = os.path.join(COMPARE_IMAGES_PATH, comp_img_name)
     comp_img = cv.imread(comp_img_path)
 
@@ -97,36 +97,18 @@ def get_similar_by_metric(compare_results: dict) -> set:
 
     for metric, metric_values in compare_results.items():
         if metric == 'rmse':
-            result.update(set(heapq.nsmallest(10, metric_values, key=metric_values.get)))
+            result.update(set(heapq.nsmallest(20, metric_values, key=metric_values.get)))
         else:
-            result.update(set(heapq.nlargest(10, metric_values, key=metric_values.get)))
+            result.update(set(heapq.nlargest(20, metric_values, key=metric_values.get)))
 
     return result
 
 
-def get_thumbnail(path):
-    i = Image.open(COMPARE_IMAGES_PATH + path)
-    return i
-
-
-def image_base64(im):
-    if isinstance(im, str):
-        im = get_thumbnail(im)
+def image_base64(path: str):
+    path = Image.open(COMPARE_IMAGES_PATH + path)
     with BytesIO() as buffer:
-        im.save(buffer, 'jpeg')
-        return base64.b64encode(buffer.getvalue()).decode()
-
-
-def image_formatter(im):
-    return f'<img src="data:image/jpeg;base64,{image_base64(im)}">'
-
-
-def image_base64_formatter(im):
-    return f'data:image/jpeg;base64,{image_base64(im)}'
-
-
-def make_clickable(link):
-    return f'<a target="_blank" href="{link}">{link}</a>'
+        path.save(buffer, 'jpeg')
+        return 'data:image/jpeg;base64,' + base64.b64encode(buffer.getvalue()).decode()
 
 
 def calculate_similarity() -> dict:
@@ -149,20 +131,20 @@ def calculate_similarity() -> dict:
 
 if __name__ == '__main__':
     st.set_page_config(layout='wide')
-    st.title('Image similarity app')
+    st.title('Similar products by photo')
     st.markdown('---')
     client = init_dbconnection()
     database = client[MONGO_DB]
-    uploaded_image = st.file_uploader('Upload original image', type=['png', 'jpg', 'jpeg', 'webp'])
+    uploaded_image = st.file_uploader('上传原始图像 / Upload original image', type=['png', 'jpg', 'jpeg', 'webp'])
     if uploaded_image is not None:
         Image.open(uploaded_image).save('img.png')
         resize_image_to_400px('img.png')
-        process_images(COMPARE_IMAGES_PATH)
         original_image = cv.imread('img.png')
-        st.image(uploaded_image, 'Original image')
+        st.image(uploaded_image, '原始图像 / Original image')
 
         st.markdown('---')
-        st.write('## Similar images')
+        st.write('## 类似产品清单 / List of similar products')
+        process_images(COMPARE_IMAGES_PATH)
         total_similarity_result = calculate_similarity()
         top_similar_images = get_similar_by_metric(total_similarity_result)
 
@@ -171,18 +153,16 @@ if __name__ == '__main__':
             product_data = database['bags'].find({'images.path': 'full/' + image_path})
             for row in product_data:
                 table_data.append({
-                    'Image': row['images'][0]['path'][5:],
-                    'Name': row['name'],
-                    'Price': row['price'],
-                    'Link': row['url'],
-                    'Site': row['site']
+                    '图像 / Image': row['images'][0]['path'][5:],
+                    '产品名 / Name': row['name'],
+                    '价格 / Price': row['price'],
+                    '链接 / Link': row['url'],
+                    '网站 / Site': row['site']
                 })
 
-        # table = pd.DataFrame(table_data)
-        # table['Image'] = table['Image'].map(lambda f: get_thumbnail(f))
-        # table['Link'] = table['Link'].apply(make_clickable)
-        # st.write(table.to_html(formatters={'Image': image_formatter}, escape=False), unsafe_allow_html=True)
-
         tableSt = pd.DataFrame(table_data)
-        tableSt['Image'] = tableSt['Image'].apply(image_base64_formatter)
-        st.data_editor(tableSt, column_config={'Image': st.column_config.ImageColumn(), 'Link': st.column_config.LinkColumn(disabled=True)})
+        tableSt['图像 / Image'] = tableSt['图像 / Image'].apply(image_base64)
+        st.data_editor(tableSt, use_container_width=True, height=950, column_config={
+            '图像 / Image': st.column_config.ImageColumn(),
+            '链接 / Link': st.column_config.LinkColumn(disabled=True)
+        })
