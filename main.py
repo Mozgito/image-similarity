@@ -6,6 +6,7 @@ import numpy as np
 import os
 import pandas as pd
 import pillow_avif
+import pymongo
 import streamlit as st
 from io import BytesIO
 from multiprocessing import Pool
@@ -14,8 +15,14 @@ from PIL import Image
 
 np.seterr(divide='ignore', invalid='ignore')
 
-compare_images_path = 'compare_images'
-original_images_path = 'original_images'
+COMPARE_IMAGES_PATH = ''
+MONGO_URI = ''
+MONGO_DB = ''
+
+
+@st.cache_resource
+def init_dbconnection():
+    return pymongo.MongoClient(MONGO_URI)
 
 
 def process_images(images_path: str) -> None:
@@ -73,13 +80,13 @@ def convert_avif_to_jpg(image_path: str) -> str:
 
 
 def compare_images(comp_img_name) -> dict:
-    comp_img_path = os.path.join(compare_images_path, comp_img_name)
+    comp_img_path = os.path.join(COMPARE_IMAGES_PATH, comp_img_name)
     comp_img = cv.imread(comp_img_path)
 
     return {
-        'img_path': comp_img_path,
+        'img_name': comp_img_name,
         'psnr': psnr(original_image, comp_img),
-        'ssim': ssim(original_image, comp_img),
+        # 'ssim': ssim(original_image, comp_img),
         'rmse': rmse(original_image, comp_img),
         'sre': sre(original_image, comp_img)
     }
@@ -98,7 +105,7 @@ def get_similar_by_metric(compare_results: dict) -> set:
 
 
 def get_thumbnail(path):
-    i = Image.open(path)
+    i = Image.open(COMPARE_IMAGES_PATH + path)
     return i
 
 
@@ -114,36 +121,68 @@ def image_formatter(im):
     return f'<img src="data:image/jpeg;base64,{image_base64(im)}">'
 
 
+def image_base64_formatter(im):
+    return f'data:image/jpeg;base64,{image_base64(im)}'
+
+
+def make_clickable(link):
+    return f'<a target="_blank" href="{link}">{link}</a>'
+
+
+def calculate_similarity() -> dict:
+    total_result = {'psnr': {}, 'rmse': {}, 'sre': {}}
+    with Pool(4) as pool:
+        result = pool.map_async(compare_images, os.listdir(COMPARE_IMAGES_PATH))
+        for value in result.get():
+            total_result['psnr'].update({value['img_name']: value['psnr']})
+            #total_result['ssim'].update({value['img_name']: value['ssim']})
+            total_result['rmse'].update({value['img_name']: value['rmse']})
+            total_result['sre'].update({value['img_name']: value['sre']})
+        pool.close()
+        pool.join()
+
+    cv.waitKey(0)
+    cv.destroyAllWindows()
+
+    return total_result
+
+
 if __name__ == '__main__':
+    st.set_page_config(layout='wide')
     st.title('Image similarity app')
     st.markdown('---')
+    client = init_dbconnection()
+    database = client[MONGO_DB]
     uploaded_image = st.file_uploader('Upload original image', type=['png', 'jpg', 'jpeg', 'webp'])
     if uploaded_image is not None:
         Image.open(uploaded_image).save('img.png')
         resize_image_to_400px('img.png')
-        process_images(compare_images_path)
-
-        total_result = {'psnr': {}, 'ssim': {}, 'rmse': {}, 'sre': {}}
+        process_images(COMPARE_IMAGES_PATH)
         original_image = cv.imread('img.png')
         st.image(uploaded_image, 'Original image')
+
         st.markdown('---')
         st.write('## Similar images')
+        total_similarity_result = calculate_similarity()
+        top_similar_images = get_similar_by_metric(total_similarity_result)
 
-        with Pool(4) as pool:
-            result = pool.map_async(compare_images, os.listdir(compare_images_path))
-            for value in result.get():
-                total_result['psnr'].update({value['img_path']: value['psnr']})
-                total_result['ssim'].update({value['img_path']: value['ssim']})
-                total_result['rmse'].update({value['img_path']: value['rmse']})
-                total_result['sre'].update({value['img_path']: value['sre']})
-            pool.close()
-            pool.join()
+        table_data = []
+        for image_path in top_similar_images:
+            product_data = database['bags'].find({'images.path': 'full/' + image_path})
+            for row in product_data:
+                table_data.append({
+                    'Image': row['images'][0]['path'][5:],
+                    'Name': row['name'],
+                    'Price': row['price'],
+                    'Link': row['url'],
+                    'Site': row['site']
+                })
 
-        cv.waitKey(0)
-        cv.destroyAllWindows()
-        similar_images = get_similar_by_metric(total_result)
-        table_total = pd.DataFrame(total_result)
-        table = pd.DataFrame(similar_images, columns=['Path'])
-        table['Image'] = table.Path.map(lambda f: get_thumbnail(f))
-        st.write(table.to_html(formatters={'Image': image_formatter}, escape=False), unsafe_allow_html=True)
-        st.dataframe(table_total)
+        # table = pd.DataFrame(table_data)
+        # table['Image'] = table['Image'].map(lambda f: get_thumbnail(f))
+        # table['Link'] = table['Link'].apply(make_clickable)
+        # st.write(table.to_html(formatters={'Image': image_formatter}, escape=False), unsafe_allow_html=True)
+
+        tableSt = pd.DataFrame(table_data)
+        tableSt['Image'] = tableSt['Image'].apply(image_base64_formatter)
+        st.data_editor(tableSt, column_config={'Image': st.column_config.ImageColumn(), 'Link': st.column_config.LinkColumn(disabled=True)})
