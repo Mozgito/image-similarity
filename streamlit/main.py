@@ -5,7 +5,6 @@ import math
 import numpy as np
 import os
 import pandas as pd
-import pillow_avif
 import pymongo
 import streamlit as st
 from io import BytesIO
@@ -15,23 +14,14 @@ from PIL import Image
 
 np.seterr(divide='ignore', invalid='ignore')
 
-COMPARE_IMAGES_PATH = ''
+COMPARE_IMAGES_PATH = 'compare_images/'
 MONGO_URI = ''
 MONGO_DB = ''
 
 
 @st.cache_resource
 def init_dbconnection():
-    return pymongo.MongoClient(MONGO_URI)
-
-
-def process_images(images_path: str) -> None:
-    for image in os.listdir(images_path):
-        image_path = os.path.join(images_path, image)
-        if os.path.isfile(image_path):
-            if image_path.endswith('.avif'):
-                image_path = convert_avif_to_jpg(image_path)
-            resize_image_to_400px(image_path)
+    return pymongo.MongoClient(MONGO_URI, serverSelectionTimeoutMS=10000)
 
 
 def resize_image_to_400px(image_path: str) -> None:
@@ -71,14 +61,6 @@ def resize_image_to_400px(image_path: str) -> None:
     cv.destroyAllWindows()
 
 
-def convert_avif_to_jpg(image_path: str) -> str:
-    avif_img = Image.open(image_path)
-    avif_img.save(image_path.replace("avif", 'jpg'), 'JPEG')
-    os.remove(image_path)
-
-    return image_path.replace("avif", 'jpg')
-
-
 def compare_images(comp_img_name: str) -> dict:
     comp_img_path = os.path.join(COMPARE_IMAGES_PATH, comp_img_name)
     comp_img = cv.imread(comp_img_path)
@@ -86,7 +68,7 @@ def compare_images(comp_img_name: str) -> dict:
     return {
         'img_name': comp_img_name,
         'psnr': psnr(original_image, comp_img),
-        # 'ssim': ssim(original_image, comp_img),
+        'ssim': ssim(original_image, comp_img),
         'rmse': rmse(original_image, comp_img),
         'sre': sre(original_image, comp_img)
     }
@@ -112,12 +94,12 @@ def image_base64(path: str):
 
 
 def calculate_similarity() -> dict:
-    total_result = {'psnr': {}, 'rmse': {}, 'sre': {}}
+    total_result = {'psnr': {}, 'ssim': {}, 'rmse': {}, 'sre': {}}
     with Pool(4) as pool:
         result = pool.map_async(compare_images, os.listdir(COMPARE_IMAGES_PATH))
         for value in result.get():
             total_result['psnr'].update({value['img_name']: value['psnr']})
-            #total_result['ssim'].update({value['img_name']: value['ssim']})
+            total_result['ssim'].update({value['img_name']: value['ssim']})
             total_result['rmse'].update({value['img_name']: value['rmse']})
             total_result['sre'].update({value['img_name']: value['sre']})
         pool.close()
@@ -131,6 +113,11 @@ def calculate_similarity() -> dict:
 
 if __name__ == '__main__':
     st.set_page_config(layout='wide')
+    st.markdown('''
+      <style>
+        footer {visibility: hidden}
+      </style>
+    ''', unsafe_allow_html=True)
     st.title('Similar products by photo')
     st.markdown('---')
     client = init_dbconnection()
@@ -144,7 +131,6 @@ if __name__ == '__main__':
 
         st.markdown('---')
         st.write('## 类似产品清单 / List of similar products')
-        process_images(COMPARE_IMAGES_PATH)
         total_similarity_result = calculate_similarity()
         top_similar_images = get_similar_by_metric(total_similarity_result)
 

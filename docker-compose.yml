@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  streamlit:
+    build:
+      context: ./streamlit
+      dockerfile: Dockerfile
+    container_name: streamlit
+    environment:
+      - "TZ=Asia/Shanghai"
+    volumes:
+      - ./streamlit/:/streamlit/
+      - /path_to_images/:/streamlit/compare_images/
+    restart: always
+
+  reverse:
+    container_name: reverse
+    hostname: reverse
+    build: ./nginx
+    ports:
+      - "8080:8080"
+      - "443:443"
+    depends_on:
+      - streamlit
+    restart: always
