@@ -7,10 +7,12 @@ services:
       dockerfile: Dockerfile
     container_name: streamlit
     environment:
-      - "TZ=Asia/Shanghai"
+      - TZ=Asia/Shanghai
+      - MONGO_URL=${MONGO_URL}
+      - MONGO_DB=${MONGO_DB}
     volumes:
       - ./streamlit/:/streamlit/
-      - /path_to_images/:/streamlit/compare_images/
+      - ${IMAGES_PATH}:/streamlit/compare_images/
     restart: always
 
   reverse:

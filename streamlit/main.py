@@ -7,21 +7,24 @@ import os
 import pandas as pd
 import pymongo
 import streamlit as st
+from dotenv import load_dotenv
 from io import BytesIO
 from multiprocessing import Pool
 from image_similarity_measures.quality_metrics import psnr, rmse, ssim, sre
 from PIL import Image
 
+load_dotenv()
 np.seterr(divide='ignore', invalid='ignore')
 
 COMPARE_IMAGES_PATH = 'compare_images/'
-MONGO_URI = ''
-MONGO_DB = ''
+MONGO_URL = os.environ.get("MONGO_URL")
+MONGO_DB = os.environ.get("MONGO_DB")
+COLLECTION = ''
 
 
 @st.cache_resource
 def init_dbconnection():
-    return pymongo.MongoClient(MONGO_URI, serverSelectionTimeoutMS=10000)
+    return pymongo.MongoClient(MONGO_URL, serverSelectionTimeoutMS=10000)
 
 
 def resize_image_to_400px(image_path: str) -> None:
@@ -62,7 +65,7 @@ def resize_image_to_400px(image_path: str) -> None:
 
 
 def compare_images(comp_img_name: str) -> dict:
-    comp_img_path = os.path.join(COMPARE_IMAGES_PATH, comp_img_name)
+    comp_img_path = os.path.join(COMPARE_IMAGES_PATH, COLLECTION, comp_img_name)
     comp_img = cv.imread(comp_img_path)
 
     return {
@@ -96,7 +99,7 @@ def image_base64(path: str):
 def calculate_similarity() -> dict:
     total_result = {'psnr': {}, 'ssim': {}, 'rmse': {}, 'sre': {}}
     with Pool(4) as pool:
-        result = pool.map_async(compare_images, os.listdir(COMPARE_IMAGES_PATH))
+        result = pool.map_async(compare_images, os.listdir(COMPARE_IMAGES_PATH + COLLECTION))
         for value in result.get():
             total_result['psnr'].update({value['img_name']: value['psnr']})
             total_result['ssim'].update({value['img_name']: value['ssim']})
@@ -122,6 +125,7 @@ if __name__ == '__main__':
     st.markdown('---')
     client = init_dbconnection()
     database = client[MONGO_DB]
+    COLLECTION = 'bags'
     uploaded_image = st.file_uploader('上传原始图像 / Upload original image', type=['png', 'jpg', 'jpeg', 'webp'])
     if uploaded_image is not None:
         Image.open(uploaded_image).save('img.png')
@@ -136,10 +140,10 @@ if __name__ == '__main__':
 
         table_data = []
         for image_path in top_similar_images:
-            product_data = database['bags'].find({'images.path': 'full/' + image_path})
+            product_data = database[COLLECTION].find({'images.path': COLLECTION + '/' + image_path})
             for row in product_data:
                 table_data.append({
-                    '图像 / Image': row['images'][0]['path'][5:],
+                    '图像 / Image': row['images'][0]['path'],
                     '产品名 / Name': row['name'],
                     '价格 / Price': row['price'],
                     '链接 / Link': row['url'],
