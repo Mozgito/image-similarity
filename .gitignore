@@ -1,5 +1,4 @@
 .idea
 /venv
-
-/compare_images/*
-/original_images/*
+/nginx/auth/.htpasswd
+.env
