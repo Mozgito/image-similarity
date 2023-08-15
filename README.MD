@@ -1,8 +1,9 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)]()
 [![Python](https://img.shields.io/badge/python->=3.8-blue.svg)](https://www.python.org/downloads/)
 # image-similarity
-App for getting the similar products by photo. List of products and photos are coming from scraping the websites. 
+Streamlit app for getting the similar products by photo. List of products and photos are coming from scraping the websites. 
 Images are stored in directory and product data stored in MongoDB.
+* Note: with big amount of data or long calculating page is refreshing.
 ### Features
 * This project (docker branch) is depending on the other `scrapy-spiders` project, that is scraping products (photos and data).
 * Built on back of docker & docker-compose.
